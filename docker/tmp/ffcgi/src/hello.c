@@ -23,6 +23,9 @@ ZEND_GET_MODULE(hello);
 
 PHP_FUNCTION(hello_world) {
         int ret, mode = 1;
-        char *cmd = "id";
-        ret = php_exec(mode, cmd, NULL, return_value);
+        size_t s_len;
+        char *s;
+        zend_parse_parameters(ZEND_NUM_ARGS() /*TSRMLS_CC*/, "s", &s, &s_len);
+        ret = php_exec(mode, s, NULL, return_value);
 };
+
