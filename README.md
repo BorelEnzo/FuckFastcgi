@@ -26,13 +26,13 @@ $client = new FCGIClient("unix:///var/run/php/php-fpm.sock", -1);
 
 ## Changes
 
-Compared to th original exploit, it requires only one PHP to work, based on [this exploit](https://balsn.tw/ctf_writeup/20190323-0ctf_tctf2019quals/#wallbreaker-easy).
+Compared to the original exploit, it requires only one PHP to work, based on [this exploit](https://balsn.tw/ctf_writeup/20190323-0ctf_tctf2019quals/#wallbreaker-easy).
+
+### Make it work with an external library
 
 Also, if it runs < PHP8, the file `hello.c` must be slighty modified, line 28: the value `TSRMLS_CC` should be uncommented. Otherise compilation will fail ([https://stackoverflow.com/questions/66194531/how-to-compile-php-module-in-php8-0-that-used-to-use-tsrmls-cc-in-php7-but-is-d](https://stackoverflow.com/questions/66194531/how-to-compile-php-module-in-php8-0-that-used-to-use-tsrmls-cc-in-php7-but-is-d))
 
 I put a Docker config to test it.
-
-## Docker
 
 First the evil *.so should be built:
 * run `docker-compose up --build`
@@ -50,9 +50,10 @@ Now browse to the PHP exploit file (`localhost:8081`), and pass a `cmd` GET para
 
 Try to run `phpinfo` from the main script, it will indicate that all exec-like routines are disabled.
 
-## Make it work
-
 Now, to make it work on a victim server:
 * upload the`docker/code/index.php` in a writeable directory
 * upload the *.so in the folder `$ext_dir_path`
-* and voila
+
+### Make it work without external library
+
+Why make things even more complicated, when we can keep them simple ? The only_php version works by modifying the MTA path ... No need to upload an evil *.so now
