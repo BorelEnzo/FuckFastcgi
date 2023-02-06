@@ -5,8 +5,9 @@
 This is a php script to exploit fastcgi protocol to bypass `open_basedir` and `disable_functions`.
 
 It will help you to bypass strict `disable_functions` to RCE by loading the malicious extension.
+While the original exploit loads an external lib, which must be compatible with the current installation, my exploit is pure PHP
 
-## Usage
+## Version 1 - Similar to the original FuckFastCGI, but made simpler
 
 - Update the config between the markers:
 ```
@@ -24,11 +25,7 @@ or (should be a symlink to the real socket)
 $client = new FCGIClient("unix:///var/run/php/php-fpm.sock", -1);
 ```
 
-## Changes
-
 Compared to the original exploit, it requires only one PHP to work, based on [this exploit](https://balsn.tw/ctf_writeup/20190323-0ctf_tctf2019quals/#wallbreaker-easy).
-
-### Make it work with an external library
 
 Also, if it runs < PHP8, the file `hello.c` must be slighty modified, line 28: the value `TSRMLS_CC` should be uncommented. Otherise compilation will fail ([https://stackoverflow.com/questions/66194531/how-to-compile-php-module-in-php8-0-that-used-to-use-tsrmls-cc-in-php7-but-is-d](https://stackoverflow.com/questions/66194531/how-to-compile-php-module-in-php8-0-that-used-to-use-tsrmls-cc-in-php7-but-is-d))
 
@@ -54,6 +51,6 @@ Now, to make it work on a victim server:
 * upload the`docker/code/index.php` in a writeable directory
 * upload the *.so in the folder `$ext_dir_path`
 
-### Make it work without external library
+## Version 2 - Make it work without external library
 
-Why make things even more complicated, when we can keep them simple ? The only_php version works by modifying the MTA path ... No need to upload an evil *.so now
+Why make things even more complicated, when we can keep them simple ? The `only_php` version works by modifying the MTA path ... No need to upload an evil *.so now

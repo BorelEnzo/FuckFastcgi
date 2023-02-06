@@ -18,6 +18,12 @@
  *
  * @author      Pierrick Charron <pierrick@webstart.fr>
  * @version     1.0
+ * 
+ * @author      Enzo Borel - Testeur de Stylos
+ * @version     1.1
+ * 
+ * In this version 1.1, I propose an exploit in pure PHP, that does not require any additional library.
+ * Instead of loeading an external lib, I modify the MTA, and trigger the execution by a call to the mail routine
  */
 class FCGIClient
 {
